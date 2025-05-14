@@ -1,22 +1,24 @@
 import rclpy
 from rclpy.node import Node
+import pygame
 
-import torch
+from sobits_interfaces.action import TextToSpeech
+from ament_index_python.packages import get_package_share_directory
+from rclpy.action import ActionServer, GoalResponse, CancelResponse
+
 from parler_tts import ParlerTTSForConditionalGeneration
+from rubyinserter import add_ruby
 from transformers import AutoTokenizer
 import numpy as np
-import soundfile as sf
-import pygame
-import tempfile
+import torch
 import os
-from rubyinserter import add_ruby
+import soundfile as sf
+import tempfile
 import time
 
-class TTSInference:
-    """
-    TTS (Text-to-Speech) 推論処理を行うクラス。
-    """
-    def __init__(self, language="ja", device=None):
+class TTSInference(Node):
+    def __init__(self, device=None):
+        super().__init__('tts_inference_server')
         """
         コンストラクタ。
 
@@ -25,7 +27,9 @@ class TTSInference:
             device (str, optional): 処理を実行するデバイス (例: 'cuda:0', 'cpu')。
                 デフォルトは None (利用可能な場合は CUDA、それ以外は CPU)。
         """
-        self.language = language
+        # 並列処理に関する警告を抑制
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
+        self.language = "ja"
         self.device = device if device else "cuda:0" if torch.cuda.is_available() else "cpu"
         self.model = None
         self.tokenizer = None
@@ -43,6 +47,15 @@ class TTSInference:
             },
         }
         self._setup()
+
+        if self.language == "ja":
+            prompt = "こんにちは、今日はご機嫌いかがかしら？"
+            prompt = add_ruby(prompt)
+        else:
+            prompt = "Hello, can you hear me?"
+        description = "Jenna delivers a slightly expressive and animated speech with a moderate speed and pitch. The recording is of very high quality, with the speaker's voice sounding clear and very close up."
+        self.run(prompt, description)
+
 
     def _setup(self):
         """
@@ -141,25 +154,12 @@ class TTSInference:
         end_time = time.time()
         print(f"TTS推論処理全体: {end_time - start_time:.4f} 秒")
 
-def main():
-    """
-    メイン関数。TTSInference クラスを使用する。
-    """
-    # launchから取得する言語
-    language = "ja"  # 例
-    # 並列処理に関する警告を抑制
-    os.environ["TOKENIZERS_PARALLELISM"] = "false"
-    # TTSInferenceクラスのインスタンスを作成
-    tts_inference = TTSInference(language=language)
+def main(args=None):
+    rclpy.init(args=args)
 
-    if language == "ja":
-        prompt = "こんにちは、今日はご機嫌いかがかしら？"
-        prompt = add_ruby(prompt)
-    else:
-        prompt = "Hello, can you hear me?"
-    description = "Jenna delivers a slightly expressive and animated speech with a moderate speed and pitch. The recording is of very high quality, with the speaker's voice sounding clear and very close up."
-
-    tts_inference.run(prompt, description)
+    server = TTSInference()
+    rclpy.spin(server)
+    rclpy.shutdown()
 
 if __name__ == "__main__":
     main()
