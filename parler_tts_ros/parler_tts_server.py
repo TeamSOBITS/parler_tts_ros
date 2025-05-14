@@ -11,25 +11,25 @@ from rubyinserter import add_ruby
 from transformers import AutoTokenizer
 import numpy as np
 import torch
-import os
 import soundfile as sf
 import tempfile
 import time
 
-class TTSInference(Node):
+class ParlerTTSActionServer(Node):
     def __init__(self, device=None):
-        super().__init__('tts_inference_server')
-        """
-        コンストラクタ。
+        super().__init__('parler_tts_action_server')
 
-        Args:
-            language (str, optional): 使用する言語 ("en" または "ja")。デフォルトは "ja"。
-            device (str, optional): 処理を実行するデバイス (例: 'cuda:0', 'cpu')。
-                デフォルトは None (利用可能な場合は CUDA、それ以外は CPU)。
-        """
-        # 並列処理に関する警告を抑制
-        os.environ["TOKENIZERS_PARALLELISM"] = "false"
-        self.language = "ja"
+        start_time = time.time()
+
+        # パラメータの宣言 (launch ファイルから設定可能、デフォルト値も指定)
+        self.declare_parameter('language', 'en')
+        self.declare_parameter('description', 'Jenna delivers a slightly expressive and animated speech with a moderate speed and pitch. The recording is of very high quality, with the speaker voice sounding clear and very close up.')
+
+        # パラメータの取得
+        self.language = self.get_parameter('language').get_parameter_value().string_value
+        self.description = self.get_parameter('description').get_parameter_value().string_value
+
+        # デバイス設定
         self.device = device if device else "cuda:0" if torch.cuda.is_available() else "cpu"
         self.model = None
         self.tokenizer = None
@@ -46,22 +46,7 @@ class TTSInference(Node):
                 "description_tokenizer_name": "2121-8/japanese-parler-tts-mini",
             },
         }
-        self._setup()
 
-        if self.language == "ja":
-            prompt = "こんにちは、今日はご機嫌いかがかしら？"
-            prompt = add_ruby(prompt)
-        else:
-            prompt = "Hello, can you hear me?"
-        description = "Jenna delivers a slightly expressive and animated speech with a moderate speed and pitch. The recording is of very high quality, with the speaker's voice sounding clear and very close up."
-        self.run(prompt, description)
-
-
-    def _setup(self):
-        """
-        モデルとトークナイザーのロード、言語設定を行う内部メソッド。
-        """
-        start_time = time.time()
         model_config = self.language_config.get(self.language)
         if not model_config:
             raise ValueError(f"Unsupported language: {self.language}")
@@ -71,94 +56,128 @@ class TTSInference(Node):
             self.tokenizer = AutoTokenizer.from_pretrained(model_config["tokenizer_name"])
             self.tokenizer.pad_token_id = self.model.config.pad_token_id
         elif self.language == "ja":
-            self.prompt_tokenizer = AutoTokenizer.from_pretrained(
-                model_config["prompt_tokenizer_name"], subfolder="prompt_tokenizer"
-            )
-            self.description_tokenizer = AutoTokenizer.from_pretrained(
-                model_config["description_tokenizer_name"], subfolder="description_tokenizer"
-            )
+            self.prompt_tokenizer = AutoTokenizer.from_pretrained(model_config["prompt_tokenizer_name"], subfolder="prompt_tokenizer")
+            self.description_tokenizer = AutoTokenizer.from_pretrained(model_config["description_tokenizer_name"], subfolder="description_tokenizer")
             self.prompt_tokenizer.pad_token_id = self.model.config.pad_token_id
             self.description_tokenizer.pad_token_id = self.model.config.pad_token_id
         end_time = time.time()
-        print(f"モデルとトークナイザーのロード: {end_time - start_time:.4f} 秒")
+        self.get_logger().info(f"セットアップ完了: {end_time - start_time:.4f} 秒")
 
-    def _prepare_inputs(self, description, prompt):
-        """
-        入力を準備する内部メソッド。
+        self._action_server = ActionServer(
+            self,
+            TextToSpeech,
+            'speech_word',
+            execute_callback=self.execute_callback,
+            goal_callback=self.goal_callback,
+            cancel_callback=self.cancel_callback)
+        self.get_logger().info("ParlerTTS アクションサーバー起動")
+        self.get_logger().info("ParlerTTS は準備完了です。")
 
-        Args:
-            description (str): 話者記述テキスト。
-            prompt (str): 発話テキスト。
+    def goal_callback(self, goal_request):
+        self.get_logger().info('ゴールリクエストを受信')
+        return GoalResponse.ACCEPT
 
-        Returns:
-            tuple: 入力テンソルとプロンプト入力テンソルのタプル。
-        """
+    def cancel_callback(self, goal_handle):
+        self.get_logger().info('キャンセルリクエストを受信')
+        return CancelResponse.ACCEPT
+
+    def _prepare_inputs(self, prompt):
         start_time = time.time()
         if self.language == "en":
-            inputs = self.tokenizer(description, return_tensors="pt").to(self.device)
+            inputs = self.tokenizer(self.description, return_tensors="pt").to(self.device)
             prompt_inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
         elif self.language == "ja":
-            inputs = self.description_tokenizer(description, return_tensors="pt").to(self.device)
+            inputs = self.description_tokenizer(self.description, return_tensors="pt").to(self.device)
             prompt_inputs = self.prompt_tokenizer(prompt, return_tensors="pt").to(self.device)
         end_time = time.time()
-        print(f"トークナイザーの入力準備: {end_time - start_time:.4f} 秒")
+        self.get_logger().debug(f"トークナイザーの入力準備: {end_time - start_time:.4f} 秒")
         return inputs, prompt_inputs
 
-    def _process_and_play_audio(self, input_ids, attention_mask, prompt_input_ids, prompt_attention_mask):
-        """
-        音声データを生成し、再生する内部メソッド。
-
-        Args:
-            input_ids (torch.Tensor): 入力IDテンソル。
-            attention_mask (torch.Tensor): アテンションマスクテンソル。
-            prompt_input_ids (torch.Tensor): プロンプト入力IDテンソル。
-            prompt_attention_mask (torch.Tensor): プロンプトアテンションマスクテンソル。
-        """
+    def _process_and_play_audio(self, goal_handle, input_ids, attention_mask, prompt_input_ids, prompt_attention_mask):
         start_time = time.time()
-        generation = self.model.generate(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            prompt_input_ids=prompt_input_ids,
-            prompt_attention_mask=prompt_attention_mask,
-        )
-        audio_arr = generation.cpu().numpy().squeeze().astype(np.float32)
-        sampling_rate = self.model.config.sampling_rate
+        feedback = TextToSpeech.Feedback()
+        result = TextToSpeech.Result()
 
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as tmpfile:
-            sf.write(tmpfile.name, audio_arr, sampling_rate)
-            pygame.mixer.init()
-            pygame.mixer.music.load(tmpfile.name)
-            pygame.mixer.music.play()
-            while pygame.mixer.music.get_busy():
-                pygame.time.Clock().tick(10)
-        end_time = time.time()
-        print(f"音声生成と再生処理: {end_time - start_time:.4f} 秒")
-        print("音声再生が完了しました。")
+        try:
+            generation = self.model.generate(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                prompt_input_ids=prompt_input_ids,
+                prompt_attention_mask=prompt_attention_mask,
+            )
+            audio_arr = generation.cpu().numpy().squeeze().astype(np.float32)
+            sampling_rate = self.model.config.sampling_rate
 
-    def run(self, prompt, description):
-        """
-        TTS推論処理を実行するメソッド。
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as tmpfile:
+                sf.write(tmpfile.name, audio_arr, sampling_rate)
+                pygame.mixer.init()
+                pygame.mixer.music.load(tmpfile.name)
+                pygame.mixer.music.play()
 
-        Args:
-            prompt (str): 発話テキスト。
-            description (str): 話者記述テキスト。
-        """
-        start_time = time.time()
-        inputs, prompt_inputs = self._prepare_inputs(description, prompt)
-        self._process_and_play_audio(
-            inputs.input_ids,
-            inputs.attention_mask,
-            prompt_input_ids=prompt_inputs.input_ids,
-            prompt_attention_mask=prompt_inputs.attention_mask,
-        )
-        end_time = time.time()
-        print(f"TTS推論処理全体: {end_time - start_time:.4f} 秒")
+                play_time = 0.0
+                if pygame.mixer.music.get_busy():
+                    sound = pygame.mixer.Sound(tmpfile.name)
+                    play_time = sound.get_length()
+
+                interval = 0.1
+                feedback.remaining_time = play_time
+                goal_handle.publish_feedback(feedback)
+
+                while rclpy.ok() and pygame.mixer.music.get_busy():
+                    if goal_handle.is_cancel_requested:
+                        self.get_logger().info('ゴールがキャンセルされました')
+                        pygame.mixer.music.stop()
+                        goal_handle.canceled()
+                        return result
+
+                    rclpy.spin_once(self, timeout_sec=interval)
+                    feedback.remaining_time -= interval
+                    goal_handle.publish_feedback(feedback)
+
+                pygame.mixer.quit()
+                result.success = True
+                result.total_time = play_time
+                goal_handle.succeed(result)
+                end_time = time.time()
+                self.get_logger().info(f"音声生成と再生処理完了: {end_time - start_time:.4f} 秒")
+
+        except Exception as e:
+            self.get_logger().error(f"音声生成中にエラーが発生しました: {e}")
+            result.success = False
+            goal_handle.abort(result)
+
+        return result
+
+    def execute_callback(self, goal_handle):
+        self.get_logger().info(f"TTSリクエスト処理中: {goal_handle.request.text}")
+        text = goal_handle.request.text
+
+        if self.language == "ja":
+            prompt = add_ruby(text)
+        else:
+            prompt = text
+
+        try:
+            inputs, prompt_inputs = self._prepare_inputs(prompt)
+            result = self._process_and_play_audio(
+                goal_handle,
+                inputs.input_ids,
+                inputs.attention_mask,
+                prompt_input_ids=prompt_inputs.input_ids,
+                prompt_attention_mask=prompt_inputs.attention_mask,
+            )
+            return result
+        except Exception as e:
+            self.get_logger().error(f"TTS処理中にエラーが発生しました: {e}")
+            result = TextToSpeech.Result()
+            result.success = False
+            goal_handle.abort(result)
+            return result
 
 def main(args=None):
     rclpy.init(args=args)
-
-    server = TTSInference()
-    rclpy.spin(server)
+    action_server = ParlerTTSActionServer()
+    rclpy.spin(action_server)
     rclpy.shutdown()
 
 if __name__ == "__main__":
