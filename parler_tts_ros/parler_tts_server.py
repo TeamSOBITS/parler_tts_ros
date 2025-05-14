@@ -63,6 +63,8 @@ class ParlerTTSActionServer(Node):
         end_time = time.time()
         self.get_logger().info(f"セットアップ完了: {end_time - start_time:.4f} 秒")
 
+        pygame.mixer.init() # ここで一度だけ初期化
+
         self._action_server = ActionServer(
             self,
             TextToSpeech,
@@ -72,6 +74,10 @@ class ParlerTTSActionServer(Node):
             cancel_callback=self.cancel_callback)
         self.get_logger().info("ParlerTTS アクションサーバー起動")
         self.get_logger().info("ParlerTTS は準備完了です。")
+
+    def destroy_node(self):
+        pygame.mixer.quit() # ノード終了時に一度だけ終了
+        super().destroy_node()
 
     def goal_callback(self, goal_request):
         self.get_logger().info('ゴールリクエストを受信')
@@ -110,7 +116,6 @@ class ParlerTTSActionServer(Node):
 
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as tmpfile:
                 sf.write(tmpfile.name, audio_arr, sampling_rate)
-                pygame.mixer.init()
                 pygame.mixer.music.load(tmpfile.name)
                 pygame.mixer.music.play()
 
@@ -134,17 +139,17 @@ class ParlerTTSActionServer(Node):
                     feedback.remaining_time -= interval
                     goal_handle.publish_feedback(feedback)
 
-                pygame.mixer.quit()
+                pygame.mixer.music.stop() # 再生終了を明示的に停止
                 result.success = True
                 result.total_time = play_time
-                goal_handle.succeed(result)
+                goal_handle.succeed()
                 end_time = time.time()
                 self.get_logger().info(f"音声生成と再生処理完了: {end_time - start_time:.4f} 秒")
 
         except Exception as e:
             self.get_logger().error(f"音声生成中にエラーが発生しました: {e}")
             result.success = False
-            goal_handle.abort(result)
+            goal_handle.abort()
 
         return result
 
@@ -171,13 +176,14 @@ class ParlerTTSActionServer(Node):
             self.get_logger().error(f"TTS処理中にエラーが発生しました: {e}")
             result = TextToSpeech.Result()
             result.success = False
-            goal_handle.abort(result)
+            goal_handle.abort()
             return result
 
 def main(args=None):
     rclpy.init(args=args)
     action_server = ParlerTTSActionServer()
     rclpy.spin(action_server)
+    action_server.destroy_node() # ノード終了時に pygame.mixer.quit() を呼び出す
     rclpy.shutdown()
 
 if __name__ == "__main__":
