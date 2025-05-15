@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "╔══╣ Install: Ollama ROS (STARTING) ╠══╗"
+echo "╔══╣ Install: Parler_tts_ros (STARTING) ╠══╗"
 
 sudo apt update
 
@@ -14,8 +14,6 @@ pip3 install pygame
 
 pip3 install git+https://github.com/getuka/RubyInserter.git
 
-pip3 install flash-attn --no-build-isolation
-
 cd ~/colcon_ws/src/
 
 git clone -b humble-devel https://github.com/TeamSOBITS/sobits_msgs.git
@@ -28,4 +26,6 @@ pip3 install torch torchvision torchaudio
 
 pip3 install transformers==4.46.1
 
-echo "╚══╣ Install: Ollama ROS (FINISHED) ╠══╝"
+#pip3 install flash-attn --no-build-isolation
+
+echo "╚══╣ Install: Parler_tts_ros (FINISHED) ╠══╝"
