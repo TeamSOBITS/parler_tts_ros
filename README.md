@@ -63,7 +63,7 @@ Stability AIとエジンバラ大学のDan LythとSimon Kingによる論文[Natu
 
 <!-- 実行・操作方法 -->
 ## 実行・操作方法
-1. アクションサーバーを起動します．
+1. アクションサーバーを起動します．**Ready to ParlerTTS in**と表示されるまでgoalを送らずに待機してください．(時間がかかるので注意)
    ```sh
    ros2 launch parler_tts_ros parler_tts_server.launch.py 
    ```
@@ -103,7 +103,7 @@ parler_tts_server.launch.pyにある**description**の項目で，単純な説�
     ```
 
 > [!WARNING]
-> 日本語の話者はJSUTのみ利用できます．
+> 日本語の話者は「JSUT」のみ利用できます．
 <details>
 <summary>利用可能な話者の全リスト(英語)</summary>
 
