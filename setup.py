@@ -24,6 +24,7 @@ setup(
     entry_points={
         'console_scripts': [
             'parler_tts_server = parler_tts_ros.parler_tts_server:main',
+            'model_download = parler_tts_ros.model_download:main',
             'parler_tts_client = parler_tts_ros.parler_tts_client:main',
         ],
     },
