@@ -11,7 +11,7 @@ Parler_TTSは，特定のスピーカーのスタイル(性別，ピッチ，話
 
 Stability AIとエジンバラ大学のDan LythとSimon Kingによる論文[Natural language guidance of high-fidelity text-to-speech with synthetic annotations](https://www.text-description-to-speech.com) からの複製されました．
 
-本リポジトリはParler_TTSをROS2のAction通信で使用できるようにしたもので，英語と日本語に対応しています．
+本リポジトリはParler_TTSをROS2のAction通信で使用できるようにしたもので，英語と日本語での発話に対応しています．
 
 <!-- セットアップ -->
 ## セットアップ
