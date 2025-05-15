@@ -53,12 +53,17 @@ Stability AIとエジンバラ大学のDan LythとSimon Kingによる論文[Natu
     colcon build --symlink-install
     source ~/colcon_ws/install/setup.sh
     ```
+6. 言語モデルをダウンロードします．時間がかかるので注意してください．
+    ```sh
+    cd ~/colcon_ws/src/parler_tts_ros/
+    ```
+    ```sh
+    ros2 run parler_tts_ros model_download
+    ```
 
 <!-- 実行・操作方法 -->
 ## 実行・操作方法
 1. アクションサーバーを起動します．
-    > [!WARNING]
-    > 英語モデル，日本語モデルを初めて使う際は，モデルをダウンロードする必要があるため起動までに非常に時間がかかります．
    ```sh
    ros2 launch parler_tts_ros parler_tts_server.launch.py 
    ```
@@ -153,25 +158,10 @@ parler_tts_server.launch.pyにある**description**の項目で，単純な説�
 - 最高品質のオーディオを生成するには「very clear audio」という用語を含め、高レベルのバックグラウンドノイズには「very noisy audio」という用語を含めます
 - 句読点は、世代の韻律を制御するために使用できます(たとえば、カンマを使用して音声に小さな区切りを追加します)
 - 残りの音声機能(性別、発話速度、ピッチ、残響)は、プロンプトから直接制御できます
-  
-- Tips
-    - EN ver
-        - 1単語の場合だと超遅い（10秒くらい）
-        - 半角数字は微妙。ここは単語の数字のほうがいい
-        - prompt内の声の距離は必要ないかも。（そもそも声の大きさが変わらない）
-        - A female（ランダム）にしても出力時間は変わらない（若干遅いときもあるけど）
-     
-    - JA ver
-        - 全角スペース、をするとエラー起きる
-        - 半角の数字だとバグる（読めるけど）
-        - 漢数字は読める
-        - ひらがなとカタカナで差は無い気がする（ただ、一単語の場合はひらがなが優勢な気がする）
-        - あと誤字るたびにエラーが起きる（多分全角類のエラー）
-        - 文章内にローマ字があるとバグる（”あなたはyuhashiですか”だとローマ字の部分がバグる）
 
 # 言語モデルについて
 以下のモデルを使用しています．別のモデルを使用したい場合は
-parler_tts_server.pyのモデルに関する項目を変更してください．
+model_download.pyとparler_tts_server.pyのモデルに関する項目を変更してください．
 
 英語モデル：
 https://huggingface.co/parler-tts/parler-tts-mini-v1
