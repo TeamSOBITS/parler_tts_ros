@@ -12,7 +12,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'description',
-            default_value='Jenna delivers a slightly expressive and animated speech with a moderate speed and pitch. The recording is of very high quality, with the speaker voice sounding clear and very close up.',
+            default_value='Alisa.fast speed. Expression is rich. The speaking voice is very clear.',
             description='Description of the speaker voice'
         ),
         Node(
