@@ -177,10 +177,10 @@ parler_tts_server.launch.pyにある**description**の項目で，単純な説�
 
 # 言語モデルについて
 以下のモデルを使用しています．
-英語モデル：
+- 英語モデル：
 https://huggingface.co/parler-tts/parler-tts-mini-v1
 
-日本語モデル：
+- 日本語モデル：
 https://huggingface.co/2121-8/japanese-parler-tts-mini
 
 別のモデルを使用したい場合は下記のリンクから選択し，
