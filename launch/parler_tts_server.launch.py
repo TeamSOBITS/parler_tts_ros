@@ -7,7 +7,7 @@ def generate_launch_description():
     return launch_description.LaunchDescription([
         DeclareLaunchArgument(
             'language',
-            default_value='en',
+            default_value='ja',
             description='Language for TTS (en or ja)'
         ),
         DeclareLaunchArgument(
