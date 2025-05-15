@@ -56,18 +56,18 @@ class ParlerTTSActionServer(Node):
         self.get_logger().debug(f"Loading model: {model_config['model_name']}")
         self.model = ParlerTTSForConditionalGeneration.from_pretrained(model_config["model_name"]).to(self.device)
 
-        # torch.compile() の試行 (コメントはそのまま)
-        # if hasattr(torch, 'compile'):
-        #     self.get_logger().info("Attempting to compile the model with torch.compile()...")
-        #     compile_start_time = time.time()
-        #     try:
-        #         self.model = torch.compile(self.model, mode="reduce-overhead")
-        #         compile_end_time = time.time()
-        #         self.get_logger().info(f"Model compiled successfully in {compile_end_time - compile_start_time:.4f} seconds.")
-        #     except Exception as e:
-        #         self.get_logger().warn(f"Failed to compile the model: {e}. Using uncompiled model.")
-        # else:
-        #     self.get_logger().info("torch.compile() not available. Using uncompiled model.")
+        # torch.compile() は初期化時に一度だけ行う
+        if hasattr(torch, 'compile'):
+            self.get_logger().info("Attempting to compile the model with torch.compile()...")
+            compile_start_time = time.time()
+            try:
+                self.model = torch.compile(self.model, mode="reduce-overhead")
+                compile_end_time = time.time()
+                self.get_logger().info(f"Model compiled successfully in {compile_end_time - compile_start_time:.4f} seconds.")
+            except Exception as e:
+                self.get_logger().warn(f"Failed to compile the model: {e}. Using uncompiled model.")
+        else:
+            self.get_logger().info("torch.compile() not available. Using uncompiled model.")
 
         if self.language == "en":
             self.get_logger().debug(f"Loading tokenizer: {model_config['tokenizer_name']}")
@@ -83,6 +83,15 @@ class ParlerTTSActionServer(Node):
             self.description_tokenizer.pad_token_id = self.model.config.pad_token_id
             self.inputs = self.description_tokenizer(self.description, return_tensors="pt").to(self.device)
 
+        # Pygame ミキサーの初期化を __init__ で一度だけ行う
+        try:
+            pygame.mixer.init()
+            self.get_logger().info("Pygame mixer initialized.")
+        except Exception as e:
+            self.get_logger().error(f"Failed to initialize Pygame mixer: {e}")
+            # 初期化に失敗した場合、TTS 機能は利用できない可能性があるが、ノード自体は起動させる
+            # 後続の実行時にエラーが発生する可能性あり
+
         self._action_server = ActionServer(
             self,
             TextToSpeech,
@@ -94,6 +103,20 @@ class ParlerTTSActionServer(Node):
         init_end_time = time.time()
         self.get_logger().info(f"Ready to ParlerTTS in: {init_end_time - init_start_time:.4f} seconds")
 
+    # ノード破棄時のクリーンアップ処理
+    def destroy_node(self):
+        self.get_logger().info('Shutting down ParlerTTS action server...')
+        # Pygame ミキサーの解放
+        if pygame.mixer.get_init():
+            try:
+                pygame.mixer.quit()
+                self.get_logger().info('Pygame mixer quit.')
+            except Exception as e:
+                 self.get_logger().error(f"Error quitting Pygame mixer: {e}")
+        # 親クラスの destroy_node を呼び出す
+        super().destroy_node()
+
+
     def goal_callback(self, goal_request):
         self.get_logger().debug('ゴールリクエストを受信')
         return GoalResponse.ACCEPT
@@ -104,7 +127,6 @@ class ParlerTTSActionServer(Node):
 
     def tts_en(self, text):
         prompt_inputs = self.tokenizer(text, return_tensors="pt").to(self.device)
-        # Removed: self.get_logger().debug(f"EN Prompt tokenization time: {time.time() - prompt_inputs.input_ids.νας:.4f} sec")
 
         with torch.inference_mode():
             generation = self.model.generate(
@@ -113,7 +135,6 @@ class ParlerTTSActionServer(Node):
                 prompt_input_ids=prompt_inputs.input_ids,
                 prompt_attention_mask=prompt_inputs.attention_mask,
             )
-        # Removed: self.get_logger().debug(f"EN Model generation time: {time.time() - generation.sequences.νας:.4f} sec")
 
         audio_arr = generation.cpu().numpy().squeeze().astype(np.float32)
         sampling_rate = self.model.config.sampling_rate
@@ -130,7 +151,6 @@ class ParlerTTSActionServer(Node):
         try:
             sf.write(buffer, audio_arr, sampling_rate, format='WAV')
             buffer.seek(0)
-            # Removed: self.get_logger().debug(f"EN WAV buffer write time: {time.time() - buffer.getbuffer().nbytes / (sampling_rate*2) if sampling_rate > 0 else 0 :.4f} sec")
             return play_time, buffer
         except Exception as e:
             self.get_logger().error(f"Error writing EN WAV to buffer: {e}")
@@ -138,10 +158,8 @@ class ParlerTTSActionServer(Node):
 
     def tts_ja(self, text):
         prompt = add_ruby(text)
-        # Removed: self.get_logger().debug(f"JA Ruby processing time: {time.time() - len(prompt)/1000 if len(prompt)>0 else 0 :.4f} sec")
 
         prompt_inputs = self.prompt_tokenizer(prompt, return_tensors="pt").to(self.device)
-        # Removed: self.get_logger().debug(f"JA Prompt tokenization time: {time.time() - prompt_inputs.input_ids.νας:.4f} sec")
 
         with torch.inference_mode():
             generation = self.model.generate(
@@ -150,7 +168,6 @@ class ParlerTTSActionServer(Node):
                 prompt_input_ids=prompt_inputs.input_ids,
                 prompt_attention_mask=prompt_inputs.attention_mask,
             )
-        # Removed: self.get_logger().debug(f"JA Model generation time: {time.time() - generation.sequences.νας:.4f} sec")
 
         audio_arr = generation.cpu().numpy().squeeze().astype(np.float32)
         sampling_rate = self.model.config.sampling_rate
@@ -167,7 +184,6 @@ class ParlerTTSActionServer(Node):
         try:
             sf.write(buffer, audio_arr, sampling_rate, format='WAV')
             buffer.seek(0)
-            # Removed: self.get_logger().debug(f"JA WAV buffer write time: {time.time() - buffer.getbuffer().nbytes / (sampling_rate*2) if sampling_rate > 0 else 0 :.4f} sec")
             return play_time, buffer
         except Exception as e:
             self.get_logger().error(f"Error writing JA WAV to buffer: {e}")
@@ -175,8 +191,8 @@ class ParlerTTSActionServer(Node):
 
 
     def execute_callback(self, goal_handle):
-        # Removed: self.get_logger().debug(f"Callback temp node creation time: {time.time() - thread_node._handle:.4f} sec")
-        # Create the temporary node *after* the previous logging line is removed
+        # コールバック処理用の軽量な一時ノード (キャンセルの検出などに使用)
+        # ノードの作成・破棄がオーバーヘッドになる可能性はあるが、キャンセルのために一旦維持
         thread_node = Node(f"cb_parler_tts_{time.time_ns()}")
 
 
@@ -191,7 +207,7 @@ class ParlerTTSActionServer(Node):
             self.get_logger().error(f"Error decoding input text: {e}")
             response.success = False
             goal_handle.abort()
-            # Ensure temporary node is destroyed even on early exit
+            # エラー時も一時ノードを破棄
             thread_node.destroy_node()
             del thread_node
             return response
@@ -200,7 +216,7 @@ class ParlerTTSActionServer(Node):
             self.get_logger().error("Input text is empty or blank.")
             response.success = False
             goal_handle.abort()
-             # Ensure temporary node is destroyed even on early exit
+            # エラー時も一時ノードを破棄
             thread_node.destroy_node()
             del thread_node
             return response
@@ -208,37 +224,53 @@ class ParlerTTSActionServer(Node):
         self.get_logger().info(f"Input text: [{decoded_text}]")
         self.get_logger().debug(f"Processing ParlerTTS request for: '{decoded_text}'")
 
+        # Pygame が初期化されていない場合はエラー
+        if not pygame.mixer.get_init():
+            self.get_logger().error("Pygame mixer is not initialized.")
+            response.success = False
+            goal_handle.abort()
+            thread_node.destroy_node()
+            del thread_node
+            return response
+
+
         response.success = False
         response.total_time = 0.0
         play_time = 0.0
         audio_buffer = None
 
+        # TTS 合成処理
         if self.language == "en":
             play_time, audio_buffer = self.tts_en(decoded_text)
         elif self.language == "ja":
             play_time, audio_buffer = self.tts_ja(decoded_text)
-        # Removed: self.get_logger().info(f"Total audio synthesis time: {synthesis_end_time - synthesis_start_time:.4f} sec")
 
         if audio_buffer is None or play_time <= 0:
             self.get_logger().error("Audio buffer generation failed or invalid play time.")
             response.success = False
             goal_handle.abort()
-            # Ensure temporary node is destroyed even on early exit
             thread_node.destroy_node()
             del thread_node
             return response
 
         try:
-            pygame.mixer.init()
+            # Pygame の初期化は __init__ で済んでいるため不要
+            # pygame.mixer.init()
+
+            # 生成された音声データを Pygame にロード
+            # ロード処理はメインの遅延要因の一つになる可能性がある
             pygame.mixer.music.load(audio_buffer)
 
+            # 再生開始
             pygame.mixer.music.play()
             play_signal_time = time.time()
+            # リクエスト受付から発話開始までの時間をログ出力
             self.get_logger().info(f"Time from request to speech: {play_signal_time - request_process_start_time:.4f} seconds")
 
             feedback.remaining_time = play_time
             start_playback_loop_time = time.time()
 
+            # 再生中のループ処理 (フィードバックとキャンセルの検出)
             while rclpy.ok() and pygame.mixer.music.get_busy():
                 if goal_handle.is_cancel_requested:
                     self.get_logger().info('Goal canceled during playback.')
@@ -247,6 +279,7 @@ class ParlerTTSActionServer(Node):
                     response.success = False
                     break
 
+                # 一時ノードを使って ROS 2 イベントを処理 (キャンセルの検出など)
                 rclpy.spin_once(thread_node, timeout_sec=0.01)
 
                 current_time_in_loop = time.time()
@@ -259,19 +292,22 @@ class ParlerTTSActionServer(Node):
 
                 goal_handle.publish_feedback(feedback)
 
+                # 残り時間が0以下になったらループを抜ける準備
                 if feedback.remaining_time <= 0:
-                    # Add a small sleep to prevent a tight loop immediately after playback finishes
-                    # This also gives pygame a moment to update get_busy() state
-                    time.sleep(0.05)
-                    if not pygame.mixer.music.get_busy():
-                         break
+                     # 少し待って music.get_busy() が更新されるのを待つ
+                     time.sleep(0.05)
+                     if not pygame.mixer.music.get_busy():
+                          break
 
 
+            # ループ終了後の処理
             if not goal_handle.is_cancel_requested:
+                # ループを抜けたがまだ再生中だった場合 (まれなケース)
                 if pygame.mixer.music.get_busy():
                      pygame.mixer.music.stop()
                      self.get_logger().warn("Playback loop ended but music was still busy. Stopped.")
 
+                # 最終的なフィードバックを送信
                 feedback.remaining_time = 0.0
                 goal_handle.publish_feedback(feedback)
                 self.get_logger().info("ParlerTTS playback completed.")
@@ -287,28 +323,24 @@ class ParlerTTSActionServer(Node):
             response.success = False
             goal_handle.abort()
         finally:
-            if pygame.mixer.get_init():
-                pygame.mixer.quit()
+            # Pygame の解放は destroy_node で行うため、ここでは不要
+            # if pygame.mixer.get_init():
+            #     pygame.mixer.quit()
 
-            # Ensure temporary node is destroyed before the callback returns
+            # 一時ノードを破棄
             thread_node.destroy_node()
             del thread_node
-            # Removed: self.get_logger().debug(f"Callback temp node destruction time: {time.time() - cb_node_create_start_time:.4f} sec")
-            # Removed: self.get_logger().info(f"Total execute_callback processing time: {final_request_process_time - request_process_start_time:.4f} sec")
-
 
         return response
 
 def main(args=None):
     rclpy.init(args=args)
     action_server = ParlerTTSActionServer()
-    try:
-        rclpy.spin(action_server)
-    except KeyboardInterrupt:
-        action_server.get_logger().info('KeyboardInterrupt, shutting down...')
-    finally:
-        action_server.destroy_node()
-        rclpy.shutdown()
+    # rclpy.spin はノードが終了するまでブロックされる
+    rclpy.spin(action_server)
+    # spin が終了したらノード破棄処理が行われる (destroy_node が呼ばれる)
+    # action_server.destroy_node() # spin が終わると自動的に呼ばれるので不要
+    rclpy.shutdown()
 
 if __name__ == "__main__":
     main()
