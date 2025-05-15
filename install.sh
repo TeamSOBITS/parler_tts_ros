@@ -20,4 +20,12 @@ cd ~/colcon_ws/src/
 
 git clone -b humble-devel https://github.com/TeamSOBITS/sobits_msgs.git
 
+pip3 install parler_tts==0.2.3
+
+pip3 uninstall torch torchvision torchaudio
+
+pip3 install torch torchvision torchaudio
+
+pip3 install transformers==4.46.1
+
 echo "╚══╣ Install: Ollama ROS (FINISHED) ╠══╝"

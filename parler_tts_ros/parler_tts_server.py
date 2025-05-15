@@ -4,7 +4,7 @@ import pygame
 
 from sobits_interfaces.action import TextToSpeech
 from ament_index_python.packages import get_package_share_directory
-from rclpy.action import ActionServer, GoalResponse, CancelResponse
+from rclpy.action import ActionServer, GoalResponse, CancelResponse, ActionClient # ActionClientを追加 (もし必要なら)
 
 from parler_tts import ParlerTTSForConditionalGeneration
 from rubyinserter import add_ruby
@@ -19,230 +19,364 @@ import soundfile as sf
 import wave
 import time
 
+import io
+
+
 class ParlerTTSActionServer(Node):
     def __init__(self, device=None):
         super().__init__('parler_tts_action_server')
 
-        start_time = time.time() # 処理開始時刻を記録
+        init_start_time = time.time() # 初期化処理開始時刻
 
-        # パラメータの宣言 (launch ファイルから設定可能、デフォルト値も指定)
-        self.declare_parameter('language', 'en') # 言語設定のパラメータ宣言、デフォルトは英語
-        self.declare_parameter('description', 'Jenna delivers a slightly expressive and animated speech with a moderate speed and pitch. The recording is of very high quality, with the speaker voice sounding clear and very close up.') # 音声合成の説明文のパラメータ宣言、デフォルトは英語話者の説明
+        self.declare_parameter('language', 'en')
+        self.declare_parameter('description', 'Jenna delivers a slightly expressive and animated speech with a moderate speed and pitch. The recording is of very high quality, with the speaker voice sounding clear and very close up.')
 
-        # パラメータの取得
-        self.language = self.get_parameter('language').get_parameter_value().string_value # 言語パラメータの値を取得
-        self.description = self.get_parameter('description').get_parameter_value().string_value # 音声合成の説明文パラメータの値を取得
+        self.language = self.get_parameter('language').get_parameter_value().string_value
+        self.description = self.get_parameter('description').get_parameter_value().string_value
 
-        # 音声ファイル出力パスの生成
-        self.filename = os.path.join(get_package_share_directory('parler_tts_ros'), 'sounds', 'output')
+        self.filename = os.path.join(get_package_share_directory('parler_tts_ros'), 'sounds', 'output') # Note: 現在の実装ではファイル書き出しはしていない
 
-        # デバイス設定 (GPUが利用可能であればGPUを使用、そうでなければCPUを使用)
         self.device = device if device else "cuda:0" if torch.cuda.is_available() else "cpu"
-        self.model = None # TTSモデルのインスタンスを初期化
-        self.tokenizer = None # トークナイザーのインスタンスを初期化（英語用）
-        self.prompt_tokenizer = None # プロンプト用のトークナイザーのインスタンスを初期化（日本語用）
-        self.description_tokenizer = None # 説明文用のトークナイザーのインスタンスを初期化（日本語用）
+        self.get_logger().info(f"Using device: {self.device}")
+        self.model = None
+        self.tokenizer = None
+        self.prompt_tokenizer = None
+        self.description_tokenizer = None
         self.language_config = {
             "en": {
-                "model_name": "parler-tts/parler-tts-mini-v1", # 英語モデルのプリトレイン済みモデル名
-                "tokenizer_name": "parler-tts/parler-tts-mini-v1", # 英語トークナイザーのプリトレイン済みモデル名
+                "model_name": "parler-tts/parler-tts-mini-v1",
+                "tokenizer_name": "parler-tts/parler-tts-mini-v1",
             },
+            #正式版：parler-tts/parler-tts-mini-v1
             "ja": {
-                "model_name": "2121-8/japanese-parler-tts-mini", # 日本語モデルのプリトレイン済みモデル名
-                "prompt_tokenizer_name": "2121-8/japanese-parler-tts-mini", # 日本語プロンプト用トークナイザーのプリトレイン済みモデル名
-                "description_tokenizer_name": "2121-8/japanese-parler-tts-mini", # 日本語説明文用トークナイザーのプリトレイン済みモデル名
+                "model_name": "2121-8/japanese-parler-tts-mini",
+                "prompt_tokenizer_name": "2121-8/japanese-parler-tts-mini",
+                "description_tokenizer_name": "2121-8/japanese-parler-tts-mini",
             },
+            #正式版　：2121-8/japanese-parler-tts-mini
+            #ベータ版：2121-8/japanese-parler-tts-mini-bate
+            #日本語のベータ版をつかうときは、英語のところのモデルに指定する必要あり
         }
 
-        model_config = self.language_config.get(self.language) # 設定された言語に対応するモデル構成を取得
+        model_config = self.language_config.get(self.language)
         if not model_config:
-            raise ValueError(f"Unsupported language: {self.language}") # サポートされていない言語が指定された場合はエラー
+            self.get_logger().error(f"Unsupported language: {self.language}")
+            raise ValueError(f"Unsupported language: {self.language}")
 
-        # モデルとトークナイザーのロード
-        self.model = ParlerTTSForConditionalGeneration.from_pretrained(model_config["model_name"]).to(self.device) # 指定されたプリトレイン済みモデルをロードし、指定されたデバイスへ移動
+        self.get_logger().info(f"Loading model: {model_config['model_name']}")
+        model_load_start_time = time.time()
+        self.model = ParlerTTSForConditionalGeneration.from_pretrained(model_config["model_name"]).to(self.device)
+        model_load_end_time = time.time()
+        self.get_logger().info(f"Model loaded in: {model_load_end_time - model_load_start_time:.4f} seconds")
 
+        # torch.compile() の試行 (PyTorch 2.0+ 環境で効果がある可能性)
+        # 大幅な速度向上が期待できる反面、互換性の問題や初回コンパイルに時間がかかる場合があります。
+        # 有効にする場合は、以下のコメントを解除してください。
+        # if hasattr(torch, 'compile'):
+        #     self.get_logger().info("Attempting to compile the model with torch.compile()...")
+        #     compile_start_time = time.time()
+        #     try:
+        #         # modeオプション: "default", "reduce-overhead", "max-autotune"
+        #         # "reduce-overhead" はコンパイル時間を短縮しつつ速度向上を目指します
+        #         # "max-autotune" はより時間をかけて最適なコンパイルを試みます
+        #         self.model = torch.compile(self.model, mode="reduce-overhead")
+        #         # self.model = torch.compile(self.model) # default mode
+        #         compile_end_time = time.time()
+        #         self.get_logger().info(f"Model compiled successfully in {compile_end_time - compile_start_time:.4f} seconds.")
+        #     except Exception as e:
+        #         self.get_logger().warn(f"Failed to compile the model: {e}. Using uncompiled model.")
+        # else:
+        #     self.get_logger().info("torch.compile() not available. Using uncompiled model.")
+
+
+        tokenizer_load_start_time = time.time()
         if self.language == "en":
-            self.tokenizer = AutoTokenizer.from_pretrained(model_config["tokenizer_name"]) # 英語トークナイザーをロード
-            self.tokenizer.pad_token_id = self.model.config.pad_token_id # パディングトークンIDを設定
-            self.inputs = self.tokenizer(self.description, return_tensors="pt").to(self.device) # 説明文をトークナイズし、PyTorchテンソルに変換してデバイスへ移動
-
+            self.get_logger().info(f"Loading tokenizer: {model_config['tokenizer_name']}")
+            self.tokenizer = AutoTokenizer.from_pretrained(model_config["tokenizer_name"])
+            self.tokenizer.pad_token_id = self.model.config.pad_token_id
+            self.inputs = self.tokenizer(self.description, return_tensors="pt").to(self.device)
         elif self.language == "ja":
-            self.prompt_tokenizer = AutoTokenizer.from_pretrained(model_config["prompt_tokenizer_name"], subfolder="prompt_tokenizer") # 日本語プロンプト用トークナイザーをロード
-            self.description_tokenizer = AutoTokenizer.from_pretrained(model_config["description_tokenizer_name"], subfolder="description_tokenizer") # 日本語説明文用トークナイザーをロード
-            self.prompt_tokenizer.pad_token_id = self.model.config.pad_token_id # パディングトークンIDを設定
-            self.description_tokenizer.pad_token_id = self.model.config.pad_token_id # パディングトークンIDを設定
-            self.inputs = self.description_tokenizer(self.description, return_tensors="pt").to(self.device) # 説明文をトークナイズし、PyTorchテンソルに変換してデバイスへ移動
+            self.get_logger().info(f"Loading prompt tokenizer: {model_config['prompt_tokenizer_name']}")
+            self.prompt_tokenizer = AutoTokenizer.from_pretrained(model_config["prompt_tokenizer_name"], subfolder="prompt_tokenizer")
+            self.get_logger().info(f"Loading description tokenizer: {model_config['description_tokenizer_name']}")
+            self.description_tokenizer = AutoTokenizer.from_pretrained(model_config["description_tokenizer_name"], subfolder="description_tokenizer")
+            self.prompt_tokenizer.pad_token_id = self.model.config.pad_token_id
+            self.description_tokenizer.pad_token_id = self.model.config.pad_token_id
+            self.inputs = self.description_tokenizer(self.description, return_tensors="pt").to(self.device)
+        tokenizer_load_end_time = time.time()
+        self.get_logger().info(f"Tokenizers loaded in: {tokenizer_load_end_time - tokenizer_load_start_time:.4f} seconds")
 
-        end_time = time.time() # セットアップ完了時刻を記録
-        self.get_logger().info(f"セットアップ完了: {end_time - start_time:.4f} 秒") # セットアップにかかった時間をログ出力
 
-        # アクションサーバーの作成
+        init_end_time = time.time()
+        self.get_logger().info(f"セットアップ完了 (トータル初期化時間): {init_end_time - init_start_time:.4f} 秒")
+
         self._action_server = ActionServer(
             self,
-            TextToSpeech, # 定義したアクションの型
-            'speech_word', # アクション名
-            execute_callback=self.execute_callback, # ゴール実行時のコールバック関数
-            goal_callback=self.goal_callback, # ゴールリクエスト受信時のコールバック関数
-            cancel_callback=self.cancel_callback) # ゴールキャンセルリクエスト受信時のコールバック関数
+            TextToSpeech,
+            'speech_word',
+            execute_callback=self.execute_callback,
+            goal_callback=self.goal_callback,
+            cancel_callback=self.cancel_callback)
         self.get_logger().info("Ready to ParlerTTS")
 
-    # ゴールリクエスト受信時のコールバック関数
     def goal_callback(self, goal_request):
         self.get_logger().info('ゴールリクエストを受信')
-        return GoalResponse.ACCEPT # ゴールリクエストを受け付ける
+        return GoalResponse.ACCEPT
 
-    # ゴールキャンセルリクエスト受信時のコールバック関数
     def cancel_callback(self, goal_handle):
         self.get_logger().info('キャンセルリクエストを受信')
-        return CancelResponse.ACCEPT # キャンセルリクエストを受け付ける
+        return CancelResponse.ACCEPT
 
-    # 英語のテキスト読み上げ処理
     def tts_en(self, text):
-        # 入力データの準備
-        prompt_inputs = self.tokenizer(text, return_tensors="pt").to(self.device) # プロンプト（テキスト）をトークナイズし、PyTorchテンソルに変換してデバイスへ移動
+        tokenize_prompt_start_time = time.time()
+        prompt_inputs = self.tokenizer(text, return_tensors="pt").to(self.device)
+        tokenize_prompt_end_time = time.time()
+        self.get_logger().debug(f"EN Prompt tokenization time: {tokenize_prompt_end_time - tokenize_prompt_start_time:.4f} sec")
 
-        # 音声合成を実行
-        generation = self.model.generate(
-            input_ids = self.inputs.input_ids,
-            attention_mask = self.inputs.attention_mask,
-            prompt_input_ids = prompt_inputs.input_ids,
-            prompt_attention_mask = prompt_inputs.attention_mask,
-        )
-        audio_arr = generation.cpu().numpy().squeeze().astype(np.float32) # 生成された音声をNumPy配列に変換し、CPUへ移動
-        sampling_rate = self.model.config.sampling_rate # モデルのサンプリングレートを取得
+        generation_start_time = time.time()
+        with torch.inference_mode(): # 推論モードを適用
+            generation = self.model.generate(
+                input_ids=self.inputs.input_ids,
+                attention_mask=self.inputs.attention_mask,
+                prompt_input_ids=prompt_inputs.input_ids,
+                prompt_attention_mask=prompt_inputs.attention_mask,
+            )
+        generation_end_time = time.time()
+        self.get_logger().debug(f"EN Model generation time: {generation_end_time - generation_start_time:.4f} sec")
 
-        # wavファイルの作成
-        sf.write(self.filename + ".wav", audio_arr, sampling_rate)
+        audio_arr = generation.cpu().numpy().squeeze().astype(np.float32)
+        sampling_rate = self.model.config.sampling_rate
 
-        # 再生時間の取得
+        play_time = 0.0
+        if sampling_rate > 0 and len(audio_arr) > 0:
+            play_time = len(audio_arr) / float(sampling_rate)
+            self.get_logger().info(f'Calculated Play Time[s]: {play_time:.4f}')
+        else:
+            self.get_logger().error(f"Invalid audio data or sampling rate for EN TTS. Audio length: {len(audio_arr)}, Sampling rate: {sampling_rate}")
+            return 0.0, None
+
+        buffer_write_start_time = time.time()
+        buffer = io.BytesIO()
         try:
-            f = sf.SoundFile(self.filename + ".wav")
-            play_time = float(len(f)) / float(f.samplerate)
-            self.get_logger().info(f'Time[s]: {str(play_time)}') # 再生時間のログ出力
-            return play_time # 再生時間を返す
+            sf.write(buffer, audio_arr, sampling_rate, format='WAV')
+            buffer.seek(0)
+            buffer_write_end_time = time.time()
+            self.get_logger().debug(f"EN WAV buffer write time: {buffer_write_end_time - buffer_write_start_time:.4f} sec")
+            return play_time, buffer
         except Exception as e:
-            self.get_logger().error(f"Error getting play time: {e}")
-            return 0.0
+            self.get_logger().error(f"Error writing EN WAV to buffer: {e}")
+            return 0.0, None
 
     def tts_ja(self, text):
-        # ルビの追加
-        prompt = add_ruby(text)
+        ruby_start_time = time.time()
+        prompt = add_ruby(text) # ルビ振り処理
+        ruby_end_time = time.time()
+        self.get_logger().debug(f"JA Ruby processing time: {ruby_end_time - ruby_start_time:.4f} sec")
 
-        # 入力データの準備
-        prompt_inputs = self.prompt_tokenizer(prompt, return_tensors="pt").to(self.device) # プロンプト（ルビ付きテキスト）をトークナイズし、PyTorchテンソルに変換してデバイスへ移動
+        tokenize_prompt_start_time = time.time()
+        prompt_inputs = self.prompt_tokenizer(prompt, return_tensors="pt").to(self.device)
+        tokenize_prompt_end_time = time.time()
+        self.get_logger().debug(f"JA Prompt tokenization time: {tokenize_prompt_end_time - tokenize_prompt_start_time:.4f} sec")
+        
+        generation_start_time = time.time()
+        with torch.inference_mode(): # 推論モードを適用
+            generation = self.model.generate(
+                input_ids=self.inputs.input_ids,
+                attention_mask=self.inputs.attention_mask,
+                prompt_input_ids=prompt_inputs.input_ids,
+                prompt_attention_mask=prompt_inputs.attention_mask,
+            )
+        generation_end_time = time.time()
+        self.get_logger().debug(f"JA Model generation time: {generation_end_time - generation_start_time:.4f} sec")
 
-        # 音声合成を実行
-        generation = self.model.generate(
-            input_ids = self.inputs.input_ids,
-            attention_mask = self.inputs.attention_mask,
-            prompt_input_ids = prompt_inputs.input_ids,
-            prompt_attention_mask = prompt_inputs.attention_mask,
-        )
-        audio_arr = generation.cpu().numpy().squeeze().astype(np.float32) # 生成された音声をNumPy配列に変換し、CPUへ移動
-        sampling_rate = self.model.config.sampling_rate # モデルのサンプリングレートを取得
+        audio_arr = generation.cpu().numpy().squeeze().astype(np.float32)
+        sampling_rate = self.model.config.sampling_rate
 
-        # wavファイルの作成
-        sf.write(self.filename + ".wav", audio_arr, sampling_rate)
-
-        # 再生時間の取得
+        play_time = 0.0
+        if sampling_rate > 0 and len(audio_arr) > 0:
+            play_time = len(audio_arr) / float(sampling_rate)
+            self.get_logger().info(f'Calculated Play Time[s]: {play_time:.4f}')
+        else:
+            self.get_logger().error(f"Invalid audio data or sampling rate for JA TTS. Audio length: {len(audio_arr)}, Sampling rate: {sampling_rate}")
+            return 0.0, None
+        
+        buffer_write_start_time = time.time()
+        buffer = io.BytesIO()
         try:
-            f = sf.SoundFile(self.filename + ".wav")
-            play_time = float(len(f)) / float(f.samplerate)
-            self.get_logger().info(f'Time[s]: {str(play_time)}') # 再生時間のログ出力
-            return play_time # 再生時間を返す
+            sf.write(buffer, audio_arr, sampling_rate, format='WAV')
+            buffer.seek(0)
+            buffer_write_end_time = time.time()
+            self.get_logger().debug(f"JA WAV buffer write time: {buffer_write_end_time - buffer_write_start_time:.4f} sec")
+            return play_time, buffer
         except Exception as e:
-            self.get_logger().error(f"Error getting play time: {e}")
-            return 0.0
+            self.get_logger().error(f"Error writing JA WAV to buffer: {e}")
+            return 0.0, None
 
     def execute_callback(self, goal_handle):
-        thread_node = Node("execute_callback_ParlerTTS") # コールバック内で一時的なノードを作成
-        start_time = time.time() # 音声生成と再生処理開始時刻を記録
-        feedback = TextToSpeech.Feedback() # フィードバックメッセージのインスタンスを作成
-        response = TextToSpeech.Result() # 結果メッセージのインスタンスを作成
-        text = goal_handle.request.text # リクエストされたテキストを取得
+        cb_node_create_start_time = time.time()
+        # execute_callback内でrclpy.spin_onceを呼び出すために一時的なノードを作成
+        # これがパフォーマンスに大きな影響を与える場合は、より軽量なタイマーや
+        # アクションサーバー自身のスレッドでフィードバックを管理する方法を検討する必要があるかもしれません。
+        # ただし、通常は音声生成時間の方が支配的です。
+        thread_node = Node(f"cb_parler_tts_{time.time_ns()}") # ノード名が一意になるようにタイムスタンプ追加
+        cb_node_create_end_time = time.time()
+        self.get_logger().debug(f"Callback temp node creation time: {cb_node_create_end_time - cb_node_create_start_time:.4f} sec")
+
+        request_process_start_time = time.time() # リクエスト処理開始時刻
+        feedback = TextToSpeech.Feedback()
+        response = TextToSpeech.Result()
+        text = goal_handle.request.text
         
-        # デコード
-        text = codecs.decode(str(text).encode('utf-8'))
-        # 空文字チェック
-        if not text or not text.strip():
-            self.get_logger().error("Input text is empty or blank.") # 空文字の場合はエラーログ出力
-            return False
-        # Unicodeエラーチェック
         try:
-            self.get_logger().info("Input text [" + str(text) + " ] ") # 入力テキストのログ出力
+            decoded_text = codecs.decode(str(text).encode('utf-8'))
         except Exception as e:
-            self.get_logger().error(e) # Unicodeエラー発生時のログ出力
-            return False
-        # 古いファイルの削除
-        if os.path.exists(self.filename + ".wav"):
-            os.remove(self.filename + ".wav")
-        self.get_logger().info(f"Processing ParlerTTS request: {codecs.decode(str(text).encode('utf-8'))}") # 処理開始のログ出力
+            self.get_logger().error(f"Error decoding input text: {e}")
+            response.success = False
+            goal_handle.abort() # ゴールを失敗状態にする
+            thread_node.destroy_node()
+            del thread_node
+            return response
 
-        response.success = False # 初期値をFalseに設定
-        response.total_time = 0.0 # 初期値を0.0に設定
+        if not decoded_text or not decoded_text.strip():
+            self.get_logger().error("Input text is empty or blank.")
+            response.success = False
+            goal_handle.abort()
+            thread_node.destroy_node()
+            del thread_node
+            return response
+        
+        self.get_logger().info(f"Input text: [{decoded_text}]")
 
-        play_time = 0
+        # 古いファイルの削除 (現在はメモリバッファを使用しているため、この処理は不要かもしれません)
+        # もし特定のパスにファイルを保存する要件がなければ、この部分は削除可能です。
+        # current_filename = self.filename + ".wav" # output.wav
+        # if os.path.exists(current_filename):
+        #     self.get_logger().debug(f"Removing old file: {current_filename}")
+        #     os.remove(current_filename)
 
-        # 日本語の場合はルビを追加
+        self.get_logger().info(f"Processing ParlerTTS request for: '{decoded_text}'")
+
+        response.success = False
+        response.total_time = 0.0
+        play_time = 0.0
+        audio_buffer = None
+
+        # 音声合成処理
+        synthesis_start_time = time.time()
         if self.language == "en":
-            play_time = self.tts_en(text) # 英語の読み上げ処理を実行
+            play_time, audio_buffer = self.tts_en(decoded_text)
         elif self.language == "ja":
-            play_time = self.tts_ja(text) # 日本語の読み上げ処理を実行
+            play_time, audio_buffer = self.tts_ja(decoded_text)
+        synthesis_end_time = time.time()
+        self.get_logger().info(f"Total audio synthesis time: {synthesis_end_time - synthesis_start_time:.4f} sec")
 
-        # pygameの初期化と音声ファイルの再生
+        if audio_buffer is None or play_time <= 0:
+            self.get_logger().error("Audio buffer generation failed or invalid play time.")
+            response.success = False
+            goal_handle.abort()
+            thread_node.destroy_node()
+            del thread_node
+            return response
+
+        # Pygame再生
         try:
-            pygame.mixer.init() # Pygameのミキサーを初期化 (音声再生用)
-            pygame.mixer.music.load(self.filename + ".wav")
-            end_time = time.time() # 発話開始時刻を記録
-            self.get_logger().info(f"発話開始: {end_time - start_time:.4f} 秒")
+            pygame_init_start_time = time.time()
+            pygame.mixer.init()
+            pygame_init_end_time = time.time()
+            self.get_logger().info(f"Pygame mixer init time: {pygame_init_end_time - pygame_init_start_time:.4f} sec")
+
+            pygame_load_start_time = time.time()
+            pygame.mixer.music.load(audio_buffer)
+            pygame_load_end_time = time.time()
+            self.get_logger().info(f"Pygame music load time: {pygame_load_end_time - pygame_load_start_time:.4f} sec")
+
+            overall_preparation_time = time.time()
+            self.get_logger().info(f"Total time from request process start to pre-play: {overall_preparation_time - request_process_start_time:.4f} sec")
+            
             pygame.mixer.music.play()
+            play_signal_time = time.time()
+            self.get_logger().info(f"発話開始 (play() called). Time from request process start: {play_signal_time - request_process_start_time:.4f} sec")
 
-            # 再生時間が正常に取得できた場合
-            if (play_time > 0):
-                interval = 0.1 # フィードバック送信間隔
-                feedback.remaining_time = play_time # 残り時間を初期化
-                while rclpy.ok(): # ROSがシャットダウンされるまでループ
-                    # キャンセルがリクエストされた場合
-                    if goal_handle.is_cancel_requested:
-                        self.get_logger().info('Goal canceled') # キャンセルログ出力
-                        if pygame.mixer.music.get_busy():
-                            pygame.mixer.music.stop() # 再生中の音楽を停止
-                        goal_handle.canceled() # ゴールをキャンセル状態にする
-                        thread_node.destroy_node() # 一時ノードを破棄
-                        del thread_node # 一時ノードのオブジェクトを削除
-                        return response # レスポンスを返す
-                    rclpy.spin_once(thread_node, timeout_sec=0.1) # イベント処理とタイマーコールバックを処理
-                    response.total_time += interval # 経過時間を更新
-                    feedback.remaining_time -= interval # 残り時間を更新
 
-                    # 再生が終了した場合
-                    if (feedback.remaining_time <= 0.0):
+            interval = 0.1 # フィードバック送信間隔
+            feedback.remaining_time = play_time
+            start_playback_loop_time = time.time()
+
+            while rclpy.ok() and pygame.mixer.music.get_busy(): # pygame.mixer.music.get_busy()で再生中か確認
+                if goal_handle.is_cancel_requested:
+                    self.get_logger().info('Goal canceled during playback.')
+                    pygame.mixer.music.stop()
+                    goal_handle.canceled()
+                    response.success = False # キャンセル時は通常 False
+                    break # ループを抜ける
+
+                rclpy.spin_once(thread_node, timeout_sec=0.01) # タイムアウトを短くして反応性を上げる
+                
+                current_time_in_loop = time.time()
+                elapsed_in_loop = current_time_in_loop - start_playback_loop_time
+                response.total_time = elapsed_in_loop # 経過時間を更新
+                feedback.remaining_time = play_time - elapsed_in_loop # 残り時間を更新
+                
+                if feedback.remaining_time < 0:
+                    feedback.remaining_time = 0.0
+
+                goal_handle.publish_feedback(feedback)
+
+                # 実際の再生時間と計算上のplay_timeがずれる可能性を考慮し、
+                # get_busy() が False になったらループを抜けるようにする。
+                # ただし、念のため remaining_time もチェックする。
+                if feedback.remaining_time <= 0:
+                    # 少し待ってから最終確認
+                    time.sleep(0.1) # 念のためバッファが空になるのを待つ
+                    if not pygame.mixer.music.get_busy():
                         break
-                    else:
-                        goal_handle.publish_feedback(feedback) # フィードバックを送信
+            
+            # ループ終了後の処理
+            if not goal_handle.is_cancel_requested:
+                if pygame.mixer.music.get_busy(): # まだ再生中なら停止（予期せぬ場合）
+                    pygame.mixer.music.stop()
+                    self.get_logger().warn("Playback loop ended but music was still busy. Stopped.")
 
-                feedback.remaining_time = 0.0 # 残り時間を0に設定
-                goal_handle.publish_feedback(feedback) # 最終フィードバックを送信
-                self.get_logger().info("ParlerTTS playback completed.") # 処理完了のログ出力
+                feedback.remaining_time = 0.0
+                goal_handle.publish_feedback(feedback)
+                self.get_logger().info("ParlerTTS playback completed.")
+                response.success = True
+                goal_handle.succeed()
+            # キャンセル済みなら response.success は False のまま
 
-                response.success = True # 成功フラグをTrueに設定
-                goal_handle.succeed() # ゴールを成功状態にする
-            else:
-                self.get_logger().warn("Play time is not valid, skipping playback.")
         except pygame.error as e:
             self.get_logger().error(f"Pygame error during playback: {e}")
+            response.success = False
+            goal_handle.abort() # pygameエラー時もabort
+        except Exception as e:
+            self.get_logger().error(f"An unexpected error occurred in execute_callback: {e}")
+            response.success = False
+            goal_handle.abort()
         finally:
             if pygame.mixer.get_init():
                 pygame.mixer.quit()
-            thread_node.destroy_node() # 一時ノードを破棄
-            del thread_node # 一時ノードのオブジェクトを削除
-            return response # レスポンスを返す
+            
+            cb_node_destroy_start_time = time.time()
+            thread_node.destroy_node()
+            del thread_node # 明示的な削除
+            cb_node_destroy_end_time = time.time()
+            self.get_logger().debug(f"Callback temp node destruction time: {cb_node_destroy_end_time - cb_node_destroy_start_time:.4f} sec")
+            
+            final_request_process_time = time.time()
+            self.get_logger().info(f"Total execute_callback processing time: {final_request_process_time - request_process_start_time:.4f} sec")
+
+        return response
 
 def main(args=None):
-    rclpy.init(args=args) # ROS 2のクライアントライブラリを初期化
-    action_server = ParlerTTSActionServer() # ParlerTTSActionServerのインスタンスを作成
-    rclpy.spin(action_server) # ノードの実行を開始（コールバック関数などを処理）
-    rclpy.shutdown() # ROS 2のシャットダウン
+    rclpy.init(args=args)
+    action_server = ParlerTTSActionServer()
+    try:
+        rclpy.spin(action_server)
+    except KeyboardInterrupt:
+        action_server.get_logger().info('KeyboardInterrupt, shutting down...')
+    finally:
+        action_server.destroy_node()
+        rclpy.shutdown()
 
 if __name__ == "__main__":
     main()
