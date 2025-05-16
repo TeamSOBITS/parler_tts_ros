@@ -49,7 +49,11 @@ Stability AIとエジンバラ大学のDan LythとSimon Kingによる論文[Natu
 5. パッケージをコンパイルします．
     ```sh
     cd ~/colcon_ws/
+    ```
+    ```sh
     colcon build --symlink-install
+    ```
+    ```sh
     source ~/colcon_ws/install/setup.sh
     ```
 6. 言語モデルをダウンロードします．時間がかかるので注意してください．
