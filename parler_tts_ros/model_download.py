@@ -2,12 +2,12 @@ from parler_tts import ParlerTTSForConditionalGeneration
 
 # メインのダウンロード処理関数
 def main():
-    model_list = ["parler-tts/parler-mini-v1"]
+    model_list = ["parler-tts/parler-tts-mini-v1"]
 
     #日本語モデル：2121-8/japanese-parler-tts-mini
 
     #英語モデル
-        #ミニ        ：parler-tts/parler-mini-v1
+        #ミニ        ：parler-tts/parler-tts-mini-v1
         #ミニジェニー：parler-tts/parler-mini-v1-jenny
 
         #感情　　　　：parler-tts/parler-tts-mini-expresso

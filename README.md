@@ -77,7 +77,7 @@ parler_tts_server.launch.pyにある**model_name**の項目で，モデル名を
 
 | 言語 | 説明 | モデル名 | 話者 |
 | --- | --- | --- | --- |
-| 英語 | ミニ | parler-tts/parler-mini-v1 | 34人から指定可能|
+| 英語 | ミニ | parler-tts/parler-tts-mini-v1 | 34人から指定可能|
 | 英語 | ミニジェニー | parler-tts/parler-mini-v1-jenny | Jennyのみ |
 | 英語 | 感情指定可能 | parler-tts/parler-tts-mini-expresso | Jerry, Thomas, Talia, Elisabeth |
 | 英語 | CPU向け | parler-tts/parler-tts-tiny-v1 | 34人から指定可能|

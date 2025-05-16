@@ -7,13 +7,13 @@ def generate_launch_description():
     return launch_description.LaunchDescription([
         DeclareLaunchArgument(
             'model_name',
-            default_value='parler-tts/parler-mini-v1',
+            default_value='parler-tts/parler-tts-mini-v1',
             description='Language model'
             
             #日本語モデル：2121-8/japanese-parler-tts-mini
 
             #英語モデル
-                #ミニ        ：parler-tts/parler-mini-v1
+                #ミニ        ：parler-tts/parler-tts-mini-v1
                 #ミニジェニー：parler-tts/parler-mini-v1-jenny
 
                 #感情　　　　：parler-tts/parler-tts-mini-expresso

@@ -23,7 +23,7 @@ class ParlerTTSActionServer(Node):
         init_start_time = time.time()
 
         # ROS 2パラメータとして'language'を宣言し、デフォルト値を設定
-        self.declare_parameter('model_name', 'parler-tts/parler-mini-v1')
+        self.declare_parameter('model_name', 'parler-tts/parler-tts-mini-v1')
         # ROS 2パラメータとして'description'を宣言し、デフォルト値を設定（音声の特徴記述）
         self.declare_parameter('description', 'Jenna delivers a slightly expressive and animated speech with a moderate speed and pitch. The recording is of very high quality, with the speaker voice sounding clear and very close up.')
 
