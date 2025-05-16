@@ -23,12 +23,12 @@ class ParlerTTSActionServer(Node):
         init_start_time = time.time()
 
         # ROS 2パラメータとして'language'を宣言し、デフォルト値を設定
-        self.declare_parameter('language', 'en')
+        self.declare_parameter('model_name', 'parler-tts/parler-mini-v1')
         # ROS 2パラメータとして'description'を宣言し、デフォルト値を設定（音声の特徴記述）
         self.declare_parameter('description', 'Jenna delivers a slightly expressive and animated speech with a moderate speed and pitch. The recording is of very high quality, with the speaker voice sounding clear and very close up.')
 
         # 宣言したパラメータの値を取得
-        self.language = self.get_parameter('language').get_parameter_value().string_value
+        self.model_name = self.get_parameter('model_name').get_parameter_value().string_value
         self.description = self.get_parameter('description').get_parameter_value().string_value
 
         # 使用するデバイス（CPUまたはGPU）を設定
@@ -41,29 +41,8 @@ class ParlerTTSActionServer(Node):
         self.prompt_tokenizer = None
         self.description_tokenizer = None
 
-        # 言語ごとのモデル設定を定義
-        self.language_config = {
-            "en": {
-                "model_name": "parler-tts/parler-tts-mini-v1",
-                "tokenizer_name": "parler-tts/parler-tts-mini-v1",
-            },
-            "ja": {
-                "model_name": "2121-8/japanese-parler-tts-mini",
-                "prompt_tokenizer_name": "2121-8/japanese-parler-tts-mini",
-                "description_tokenizer_name": "2121-8/japanese-parler-tts-mini",
-            },
-        }
-
-        # 現在の言語設定に対応するモデル設定を取得
-        model_config = self.language_config.get(self.language)
-        # サポートされていない言語の場合はエラーとして例外を発生させる
-        if not model_config:
-            self.get_logger().error(f"Unsupported language: {self.language}")
-            raise ValueError(f"Unsupported language: {self.language}")
-        self.get_logger().debug(f"Loading model: {model_config['model_name']}")
-
         # モデルをロードし、指定されたデバイスに配置
-        self.model = ParlerTTSForConditionalGeneration.from_pretrained(model_config["model_name"]).to(self.device)
+        self.model = ParlerTTSForConditionalGeneration.from_pretrained(self.model_name).to(self.device)
 
         # PyTorchのコンパイル機能が利用可能かチェックし、利用可能ならモデルをコンパイル
         if hasattr(torch, 'compile'):
@@ -79,25 +58,27 @@ class ParlerTTSActionServer(Node):
             pass # 何もしない
 
         # 言語に応じたトークナイザーをロードし、descriptionをトークナイズ
-        if self.language == "en":
-            self.get_logger().debug(f"Loading tokenizer: {model_config['tokenizer_name']}") # ログ出力
-            self.tokenizer = AutoTokenizer.from_pretrained(model_config["tokenizer_name"])
+        #日本語
+        if self.model_name == "2121-8/japanese-parler-tts-mini":
+            self.get_logger().debug(f"Loading prompt tokenizer: {self.model_name}") # ログ出力
+            # 日本語のプロンプト用トークナイザーをロード
+            self.prompt_tokenizer = AutoTokenizer.from_pretrained(self.model_name, subfolder="prompt_tokenizer")
+            self.get_logger().debug(f"Loading description tokenizer: {self.model_name,}") # ログ出力
+            # 日本語のdescription用トークナイザーをロード
+            self.description_tokenizer = AutoTokenizer.from_pretrained(self.model_name, subfolder="description_tokenizer")
+            # パディングトークンのIDを設定
+            self.prompt_tokenizer.pad_token_id = self.model.config.pad_token_id
+            self.description_tokenizer.pad_token_id = self.model.config.pad_token_id
+        #英語
+        else:
+            self.get_logger().debug(f"Loading tokenizer: {self.model_name}") # ログ出力
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
             # パディングトークンのIDを設定
             self.tokenizer.pad_token_id = self.model.config.pad_token_id
             # 英語ではpromptとdescriptionで同じトークナイザーを使用
             self.prompt_tokenizer = self.tokenizer
             self.description_tokenizer = self.tokenizer
-        elif self.language == "ja":
-            self.get_logger().debug(f"Loading prompt tokenizer: {model_config['prompt_tokenizer_name']}") # ログ出力
-            # 日本語のプロンプト用トークナイザーをロード
-            self.prompt_tokenizer = AutoTokenizer.from_pretrained(model_config["prompt_tokenizer_name"], subfolder="prompt_tokenizer")
-            self.get_logger().debug(f"Loading description tokenizer: {model_config['description_tokenizer_name']}") # ログ出力
-            # 日本語のdescription用トークナイザーをロード
-            self.description_tokenizer = AutoTokenizer.from_pretrained(model_config["description_tokenizer_name"], subfolder="description_tokenizer")
-            # パディングトークンのIDを設定
-            self.prompt_tokenizer.pad_token_id = self.model.config.pad_token_id
-            self.description_tokenizer.pad_token_id = self.model.config.pad_token_id
-
+            
         # description をトークナイズし、デバイスに配置 (どの言語でも必要)
         self.inputs = self.description_tokenizer(self.description, return_tensors="pt").to(self.device)
 
@@ -153,7 +134,7 @@ class ParlerTTSActionServer(Node):
         # 処理対象のテキストを初期化
         processed_text = text
         # 日本語特有の前処理
-        if self.language == "ja":
+        if "japanese" in self.model_name.lower():
             # ルビ挿入処理を適用
             processed_text = add_ruby(text)
             self.get_logger().debug(f"Japanese text processed with ruby: {processed_text}") # ログ出力
@@ -165,7 +146,7 @@ class ParlerTTSActionServer(Node):
         try:
              prompt_inputs = prompt_tokenizer(processed_text, return_tensors="pt").to(self.device)
         except Exception as e:
-             self.get_logger().error(f"Error tokenizing prompt text for language {self.language}: {e}") # ログ出力
+             self.get_logger().error(f"Error tokenizing prompt text for language {self.model_name}: {e}") # ログ出力
              # エラー時は再生時間0.0とNoneを返す
              return 0.0, None
 
@@ -179,7 +160,7 @@ class ParlerTTSActionServer(Node):
                      prompt_attention_mask=prompt_inputs.attention_mask, # Promptのアテンションマスク
                  )
             except Exception as e:
-                 self.get_logger().error(f"Error during model generation for language {self.language}: {e}") # ログ出力
+                 self.get_logger().error(f"Error during model generation for language {self.model_name}: {e}") # ログ出力
                  # エラー時は再生時間0.0とNoneを返す
                  return 0.0, None
 
@@ -193,9 +174,9 @@ class ParlerTTSActionServer(Node):
         play_time = 0.0
         if sampling_rate > 0 and len(audio_arr) > 0:
             play_time = len(audio_arr) / float(sampling_rate)
-            self.get_logger().info(f'Calculated Play Time[s] ({self.language}): {play_time:.4f}') # ログ出力
+            self.get_logger().info(f'Calculated Play Time[s] ({self.model_name}): {play_time:.4f}') # ログ出力
         else:
-            self.get_logger().error(f"Invalid audio data or sampling rate for {self.language} TTS. Audio length: {len(audio_arr)}, Sampling rate: {sampling_rate}") # ログ出力
+            self.get_logger().error(f"Invalid audio data or sampling rate for {self.model_name} TTS. Audio length: {len(audio_arr)}, Sampling rate: {sampling_rate}") # ログ出力
             # 無効なデータの_場合は再生時間0.0とNoneを返す
             return 0.0, None
 
@@ -208,7 +189,7 @@ class ParlerTTSActionServer(Node):
             # 再生時間と音声データバッファを返す
             return play_time, buffer
         except Exception as e:
-            self.get_logger().error(f"Error writing {self.language} WAV to buffer: {e}") # ログ出力
+            self.get_logger().error(f"Error writing {self.model_name} WAV to buffer: {e}") # ログ出力
             # エラー時は再生時間0.0とNoneを返す
             return 0.0, None
 
@@ -251,7 +232,7 @@ class ParlerTTSActionServer(Node):
             # 結果を返却
             return response
 
-        self.get_logger().info(f"Input text: [{decoded_text}] (Language: {self.language})") # ログ出力
+        self.get_logger().info(f"Input text: [{decoded_text}] (Language: {self.model_name})") # ログ出力
         self.get_logger().debug(f"Processing ParlerTTS request for: '{decoded_text}'") # ログ出力
 
         # Pygameミキサーが初期化されているかチェック

@@ -72,39 +72,20 @@ Stability AIとエジンバラ大学のDan LythとSimon Kingによる論文[Natu
 <!-- 各種パラメータ -->
 ## 各種パラメータ
 
-### 言語の切り替えについて
-parler_tts_server.launch.pyにある**language**の項目で，
-- 英語の場合　：en
-- 日本語の場合：ja
+### 言語モデルの切り替えについて
+parler_tts_server.launch.pyにある**model_name**の項目で，モデル名を指定します．デフォルト値は英語のミニ．
 
-として設定します．(デフォルト値は英語)
-
-
-### 話者や話し方の設定について
-parler_tts_server.launch.pyにある**description**の項目で，単純な説明文で話者や話し方を設定できます．
-
-話者について，特定の話者(推奨)か，毎回ランダムな話者にするかを選ぶことができます．
-
-### ランダムな話者
-**description**の項目で、話者を**male**か**female**と指定してください．
-- 例
-    ``` bash
-    default_value="A female speaker delivers a slightly expressive and animated speech with a moderate speed and pitch. The recording is of very high quality, with the speaker's voice sounding clear and very close up."
-    ```
-
-### 特定の話者
-特定の話者を使うことで、毎回同じ話者で発話させることができます．
-**description**の項目で、「Alisa」を以下のリストの中から置き換えてください．
-
-- 例
-    ``` bash
-    default_value='Alisa.fast speed. Expression is rich. The speaking voice is noisy.',
-    ```
-
-> [!WARNING]
-> 日本語の話者は「JSUT」のみ利用できます．
+| 言語 | 説明 | モデル名 | 話者 |
+| --- | --- | --- | --- |
+| 英語 | ミニ | parler-tts/parler-mini-v1 | 34人から指定可能|
+| 英語 | ミニジェニー | parler-tts/parler-mini-v1-jenny | Jennyのみ |
+| 英語 | 感情指定可能 | parler-tts/parler-tts-mini-expresso | Jerry, Thomas, Talia, Elisabeth |
+| 英語 | CPU向け | parler-tts/parler-tts-tiny-v1 | 34人から指定可能|
+| 英語 | CPU向けジェニー | parler-tts/parler-tiny-v1-jenny | Jennyのみ |
+| 日本語モデル | ミニ |2121-8/japanese-parler-tts-mini | JSUTのみ |
+ 
 <details>
-<summary>利用可能な話者の全リスト(英語)</summary>
+<summary>英語のミニとCPU向けモデルで利用可能な34人の話者の全リスト(英語)</summary>
 
 - Laura
 - Gary
@@ -142,6 +123,30 @@ parler_tts_server.launch.pyにある**description**の項目で，単純な説�
 - Emily
 </details>
 
+### 話者や話し方の設定について
+parler_tts_server.launch.pyにある**description**の項目で，単純な説明文で話者や話し方を設定できます．
+
+話者について，特定の話者(推奨)か，毎回ランダムな話者にするかを選ぶことができます．
+
+### ランダムな話者
+**description**の項目で、話者を**male**か**female**と指定してください．
+- 例
+    ``` bash
+    default_value="A female speaker delivers a slightly expressive and animated speech with a moderate speed and pitch. The recording is of very high quality, with the speaker's voice sounding clear and very close up."
+    ```
+
+### 特定の話者
+特定の話者を使うことで、毎回同じ話者で発話させることができます．
+**description**の項目で、「利用可能な話者」に置き換えてください．
+
+- 例
+    ``` bash
+    default_value='Alisa.fast speed. Expression is rich. The speaking voice is noisy.',
+    ```
+
+
+
+
 ### 話し方について
 次のような単純なテキストプロンプトで話し方を変更することができます．
 - 例1
@@ -176,13 +181,6 @@ parler_tts_server.launch.pyにある**description**の項目で，単純な説�
     - 文章内にローマ字があるとバグる（”あなたはyuhashiですか”だとローマ字の部分がバグる）
 
 # 言語モデルについて
-以下のモデルを使用しています．
-- 英語モデル：
-https://huggingface.co/parler-tts/parler-tts-mini-v1
-
-- 日本語モデル：
-https://huggingface.co/2121-8/japanese-parler-tts-mini
-
 別のモデルを使用したい場合は下記のリンクから選択し，
 model_download.pyとparler_tts_server.pyのモデルに関する項目を変更してください．
 https://huggingface.co/models?other=parler_tts&sort=likes
