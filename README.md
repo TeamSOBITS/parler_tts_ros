@@ -58,9 +58,6 @@ Stability AIとエジンバラ大学のDan LythとSimon Kingによる論文[Natu
     ```
 6. 言語モデルをダウンロードします．時間がかかるので注意してください．
     ```sh
-    cd ~/colcon_ws/src/parler_tts_ros/
-    ```
-    ```sh
     ros2 run parler_tts_ros model_download
     ```
 
