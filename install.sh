@@ -2,9 +2,9 @@
 
 echo "╔══╣ Install: Parler_tts_ros (STARTING) ╠══╗"
 
-sudo apt update
+sudo apt update -y
 
-sudo apt install ros-humble-vision-msgs
+sudo apt install -y ros-humble-vision-msgs
 
 pip3 install numpy==1.23.5
 
@@ -20,7 +20,7 @@ git clone -b humble-devel https://github.com/TeamSOBITS/sobits_msgs.git
 
 pip3 install parler_tts==0.2.3
 
-pip3 uninstall torch torchvision torchaudio
+pip3 uninstall -y torch torchvision torchaudio
 
 pip3 install torch torchvision torchaudio
 
