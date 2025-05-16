@@ -69,59 +69,41 @@ Stability AIとエジンバラ大学のDan LythとSimon Kingによる論文[Natu
 2. アクションクライアントを起動し，発話させたい文字を送信します．
 
 
-<!-- 各種パラメータ -->
-## 各種パラメータ
+## 言語モデルの切り替えについて
 
-### 言語モデルの切り替えについて
-parler_tts_server.launch.pyにある**model_name**の項目で，モデル名を指定します．デフォルト値は英語のミニ．
+1. **model_download.py**の**model_name**の項目を書き換えて実行し，モデルをダウンロードします．
+2. **parler_tts_server.launch.py**にある**model_name**の項目を書き換えて実行します．
 
-| 言語 | 説明 | モデル名 | 話者 |
-| --- | --- | --- | --- |
-| 英語 | ミニ | parler-tts/parler-tts-mini-v1 | 34人から指定可能|
-| 英語 | ミニジェニー | parler-tts/parler-mini-v1-jenny | Jennyのみ |
-| 英語 | 感情指定可能 | parler-tts/parler-tts-mini-expresso | Jerry, Thomas, Talia, Elisabeth |
-| 英語 | CPU向け | parler-tts/parler-tts-tiny-v1 | 34人から指定可能|
-| 英語 | CPU向けジェニー | parler-tts/parler-tiny-v1-jenny | Jennyのみ |
-| 日本語モデル | ミニ |2121-8/japanese-parler-tts-mini | JSUTのみ |
- 
+> [!WARNING]
+> CPUのみのPCを使用している場合，発話までに時間がかかるため，**CPU向けジェニー**の使用を推奨します．
+
+### 英語モデル
+
+| 説明 | モデル名 | 話者 |
+| --- | --- | --- |
+| ミニ(デフォルト) | parler-tts/parler-tts-mini-v1 | *34人から指定可能|
+| ミニジェニー | parler-tts/parler-mini-v1-jenny | Jennyのみ |
+| 感情指定可能 | parler-tts/parler-tts-mini-expresso | Jerry, Thomas, Talia, Elisabeth |
+| CPU向けジェニー | parler-tts/parler-tiny-v1-jenny | Jennyのみ |
+
 <details>
-<summary>英語のミニとCPU向けモデルで利用可能な34人の話者の全リスト(英語)</summary>
+ <summary>* 英語のミニモデルで利用可能な34人の話者の全リスト(英語)</summary>
 
-- Laura
-- Gary
-- Jon
-- Lea
-- Karen
-- Rick
-- Brenda
-- David
-- Eileen
-- Jordan
-- Mike
-- Yann
-- Joy
-- James
-- Eric
-- Lauren
-- Rose
-- Will
-- Jason
-- Aaron
-- Naomie
-- Alisa
-- Patrick
-- Jerry
-- Tina
-- Jenna
-- Bill
-- Tom
-- Carol
-- Barbara
-- Rebecca
-- Anna
-- Bruce
-- Emily
+|  |  |  |  |  |  |  |
+| --- | --- | --- | --- | --- | --- | --- |
+| Laura | Gary | Jon | Lea | Karen | Rick | Brenda |
+| David | Eileen | Jordan | Mike | Yann | Joy | James |
+| Eric | Lauren | Rose | Will | Jason | Aaron | Naomie |
+| Alisa | Patrick | Jerry | Tina | Jenna | Bill | Tom |
+| Carol | Barbara | Rebecca | Anna | Bruce | Emily |  |
 </details>
+
+### 日本語モデル
+| 説明 | モデル名 | 話者 |
+| --- | --- | --- | 
+| ミニ |2121-8/japanese-parler-tts-mini | JSUTのみ |
+
+
 
 ### 話者や話し方の設定について
 parler_tts_server.launch.pyにある**description**の項目で，単純な説明文で話者や話し方を設定できます．
@@ -160,7 +142,6 @@ parler_tts_server.launch.pyにある**description**の項目で，単純な説�
     ```
 
 - 最高品質のオーディオを生成するには「very clear audio」という用語を含め、高レベルのバックグラウンドノイズには「very noisy audio」という用語を含めます
-- 句読点は、世代の韻律を制御するために使用できます(たとえば、カンマを使用して音声に小さな区切りを追加します)
 - 残りの音声機能(性別、発話速度、ピッチ、残響)は、プロンプトから直接制御できます
 - EN ver
     - 声の距離は必要ないかも。（そもそも声の大きさが変わらない）
@@ -168,13 +149,16 @@ parler_tts_server.launch.pyにある**description**の項目で，単純な説�
 
 
 # 発話させる文章について
-文末にピリオド(.)あるいは句点(。)をつけてください．
+- 全モデル共通
+    - **文末にピリオド(.)あるいは句点(。)をつけてください．**
+    - **数字について，半角(1, 2など)より，one, 二などを推奨**
+    - 句読点は、世代の韻律を制御するために使用できます(たとえば、カンマを使用して音声に小さな区切りを追加します)
+
 - EN ver
     - 1単語の場合だと超遅い（10秒くらい）
     - 半角数字は微妙。ここは単語の数字のほうがいい
 - JA ver
     - 全角スペース、をするとエラー起きる
-    - 半角の数字だとバグる（読めるけど）
     - 漢数字は読める
     - ひらがなとカタカナで差は無い気がする（ただ、一単語の場合はひらがなが優勢な気がする）
     - あと誤字るたびにエラーが起きる（多分全角類のエラー）
