@@ -111,6 +111,8 @@ Stability AIとエジンバラ大学のDan LythとSimon Kingによる論文[Natu
 
 ### 話者や話し方の設定について
 parler_tts_server.launch.pyにある**description**の項目で，単純な説明文で話者や話し方を設定できます．
+- 感情指定可能モデルについて
+    - "happy", "confused", "laughing", "sad", "whisper", "emphasis"などの感情を指定できます！
 
 話者について，特定の話者(推奨)か，毎回ランダムな話者にするかを選ぶことができます．
 
