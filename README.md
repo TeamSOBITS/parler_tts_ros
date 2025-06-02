@@ -1,4 +1,8 @@
 <a name="readme-top"></a>
+[![Contributors][contributors-shield]][contributors-url]
+[![Forks][forks-shield]][forks-url]
+[![Stargazers][stars-shield]][stars-url]
+[![Issues][issues-shield]][issues-url]
 
 > [!WARNING]
 > 本リポジトリはサポートされて間もないため，今後も頻繁に大きく改良される可能性があります．
@@ -171,3 +175,14 @@ parler_tts_server.launch.pyにある**description**の項目で，単純な説�
 別のモデルを使用したい場合は下記のリンクから選択し，
 model_download.pyとparler_tts_server.pyのモデルに関する項目を変更してください．
 https://huggingface.co/models?other=parler_tts&sort=likes
+
+<!-- MARKDOWN LINKS & IMAGES -->
+<!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
+[contributors-shield]: https://img.shields.io/github/contributors/TeamSOBITS/parler_tts_ros.svg?style=for-the-badge
+[contributors-url]: https://github.com/TeamSOBITS/parler_tts_ros/graphs/contributors
+[forks-shield]: https://img.shields.io/github/forks/TeamSOBITS/parler_tts_ros.svg?style=for-the-badge
+[forks-url]: https://github.com/TeamSOBITS/parler_tts_ros/network/members
+[stars-shield]: https://img.shields.io/github/stars/TeamSOBITS/parler_tts_ros.svg?style=for-the-badge
+[stars-url]: https://github.com/TeamSOBITS/parler_tts_ros/stargazers
+[issues-shield]: https://img.shields.io/github/issues/TeamSOBITS/parler_tts_ros.svg?style=for-the-badge
+[issues-url]: https://github.com/TeamSOBITS/parler_tts_ros/issues
