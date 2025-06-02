@@ -17,6 +17,8 @@ Stability AIとエジンバラ大学のDan LythとSimon Kingによる論文[Natu
 
 本リポジトリはParler_TTSをROS2のAction通信で使用できるようにしたもので，英語と日本語での発話に対応しています．
 
+<p align="right">(<a href="#readme-top">上に戻る</a>)</p>
+
 <!-- セットアップ -->
 ## セットアップ
 
@@ -64,6 +66,7 @@ Stability AIとエジンバラ大学のDan LythとSimon Kingによる論文[Natu
     ```sh
     ros2 run parler_tts_ros model_download
     ```
+<p align="right">(<a href="#readme-top">上に戻る</a>)</p>
 
 <!-- 実行・操作方法 -->
 ## 実行・操作方法
@@ -73,6 +76,7 @@ Stability AIとエジンバラ大学のDan LythとSimon Kingによる論文[Natu
    ```
 2. アクションクライアントを起動し，発話させたい文字を送信します．
 
+<p align="right">(<a href="#readme-top">上に戻る</a>)</p>
 
 ## 言語モデルの切り替えについて
 
@@ -81,6 +85,7 @@ Stability AIとエジンバラ大学のDan LythとSimon Kingによる論文[Natu
 
 > [!WARNING]
 > CPUのみのPCを使用している場合，発話までに時間がかかるため，**CPU向けジェニー**の使用を推奨します．
+
 
 ### 英語モデル
 
@@ -103,11 +108,11 @@ Stability AIとエジンバラ大学のDan LythとSimon Kingによる論文[Natu
 | Carol | Barbara | Rebecca | Anna | Bruce | Emily |  |
 </details>
 
+
 ### 日本語モデル
 | 説明 | モデル名 | 話者 |
 | --- | --- | --- | 
 | ミニ |2121-8/japanese-parler-tts-mini | JSUTのみ |
-
 
 
 ### 話者や話し方の設定について
@@ -123,7 +128,6 @@ parler_tts_server.launch.pyにある**description**の項目で，単純な説�
     ``` bash
     default_value="A female speaker delivers a slightly expressive and animated speech with a moderate speed and pitch. The recording is of very high quality, with the speaker's voice sounding clear and very close up."
     ```
-
 ### 特定の話者
 特定の話者を使うことで、毎回同じ話者で発話させることができます．
 **description**の項目で、「利用可能な話者」に置き換えてください．
@@ -132,9 +136,6 @@ parler_tts_server.launch.pyにある**description**の項目で，単純な説�
     ``` bash
     default_value='Alisa.fast speed. Expression is rich. The speaking voice is noisy.',
     ```
-
-
-
 
 ### 話し方について
 次のような単純なテキストプロンプトで話し方を変更することができます．
@@ -154,6 +155,7 @@ parler_tts_server.launch.pyにある**description**の項目で，単純な説�
     - 声の距離は必要ないかも。（そもそも声の大きさが変わらない）
     - A female（ランダム）にしても出力時間は変わらない（若干遅いときもあるけど）
 
+<p align="right">(<a href="#readme-top">上に戻る</a>)</p>
 
 # 発話させる文章について
 - 全モデル共通
@@ -170,6 +172,8 @@ parler_tts_server.launch.pyにある**description**の項目で，単純な説�
     - ひらがなとカタカナで差は無い気がする（ただ、一単語の場合はひらがなが優勢な気がする）
     - あと誤字るたびにエラーが起きる（多分全角類のエラー）
     - 文章内にローマ字があるとバグる（”あなたはyuhashiですか”だとローマ字の部分がバグる）
+
+<p align="right">(<a href="#readme-top">上に戻る</a>)</p>
 
 # 言語モデルについて
 別のモデルを使用したい場合は下記のリンクから選択し，
