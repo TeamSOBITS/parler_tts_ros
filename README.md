@@ -3,11 +3,45 @@
 [![Forks][forks-shield]][forks-url]
 [![Stargazers][stars-shield]][stars-url]
 [![Issues][issues-shield]][issues-url]
+[![License][license-shield]][license-url]
 
-> [!WARNING]
-> 本リポジトリはサポートされて間もないため，今後も頻繁に大きく改良される可能性があります．
+# Parler TTS for ROS
 
-# Parler_tts_ros
+<!-- 目次 -->
+<details>
+  <summary>目次</summary>
+  <ol>
+    <li>
+      <a href="#概要">概要</a>
+    </li>
+    <li>
+      <a href="#セットアップ">セットアップ</a>
+      <ul>
+        <li><a href="#環境条件">環境条件</a></li>
+        <li><a href="#インストール方法">インストール方法</a></li>
+      </ul>
+    </li>
+    <li><a href="#実行操作方法">実行・操作方法</a></li>
+    <li><a href="#言語モデルの切り替えについて">言語モデルの切り替えについて</a>
+        <ul>
+            <li><a href="#英語モデル">英語モデル</a></li>
+            <li><a href="#日本語モデル">日本語モデル</a></li>
+        </ul>
+    </li>
+    <li><a href="#話者や話し方の設定について">話者や話し方の設定について</a>
+        <ul>
+            <li><a href="#ランダムな話者">ランダムな話者</a></li>
+            <li><a href="#特定の話者">特定の話者</a></li>
+        </ul>
+    </li>
+    <li><a href="#発話させる文章について">発話させる文章について</a></li>
+    <li><a href="#マイルストーン">マイルストーン</a></li>
+    <!-- <li><a href="#contributing">Contributing</a></li> -->
+    <!-- <li><a href="#license">License</a></li> -->
+    <li><a href="#参考文献">参考文献</a></li>
+  </ol>
+</details>
+
 
 <!-- レポジトリの概要 -->
 ## 概要
@@ -23,6 +57,9 @@ Stability AIとエジンバラ大学のDan LythとSimon Kingによる論文[Natu
 ## セットアップ
 
 ここで，本レポジトリのセットアップ方法について説明します．
+
+<p align="right">(<a href="#readme-top">上に戻る</a>)</p>
+
 ### 環境条件
 
 まず，以下の環境を整えてから，次のインストール段階に進んでください．
@@ -31,6 +68,8 @@ Stability AIとエジンバラ大学のDan LythとSimon Kingによる論文[Natu
 | Ubuntu | 22.04 (Jammy Jellyfish) |
 | ROS    | Humble Hawksbill |
 | Python | 3.10 |
+
+<p align="right">(<a href="#readme-top">上に戻る</a>)</p>
 
 ### インストール方法
 1. ROS2の`src`フォルダに移動します．
@@ -114,8 +153,12 @@ Stability AIとエジンバラ大学のDan LythとSimon Kingによる論文[Natu
 | --- | --- | --- | 
 | ミニ |2121-8/japanese-parler-tts-mini | JSUTのみ |
 
+別のモデルを使用したい場合は[こちら](https://huggingface.co/models?other=parler_tts&sort=likes)から選択し，
+model_download.pyとparler_tts_server.pyのモデルに関する項目を変更してください．
 
-### 話者や話し方の設定について
+<p align="right">(<a href="#readme-top">上に戻る</a>)</p>
+
+## 話者や話し方の設定について
 parler_tts_server.launch.pyにある**description**の項目で，単純な説明文で話者や話し方を設定できます．
 - 感情指定可能モデルについて
     - "happy", "confused", "laughing", "sad", "whisper", "emphasis"などの感情を指定できます！
@@ -157,28 +200,27 @@ parler_tts_server.launch.pyにある**description**の項目で，単純な説�
 
 <p align="right">(<a href="#readme-top">上に戻る</a>)</p>
 
-# 発話させる文章について
+## 発話させる文章について
 - 全モデル共通
     - **文末にピリオド(.)あるいは句点(。)をつけてください．**
     - **数字について，半角(1, 2など)より，one, 二などを推奨**
     - 句読点は、世代の韻律を制御するために使用できます(たとえば、カンマを使用して音声に小さな区切りを追加します)
-
-- EN ver
-    - 1単語の場合だと超遅い（10秒くらい）
-    - 半角数字は微妙。ここは単語の数字のほうがいい
-- JA ver
-    - 全角スペース、をするとエラー起きる
-    - 漢数字は読める
-    - ひらがなとカタカナで差は無い気がする（ただ、一単語の場合はひらがなが優勢な気がする）
-    - あと誤字るたびにエラーが起きる（多分全角類のエラー）
-    - 文章内にローマ字があるとバグる（”あなたはyuhashiですか”だとローマ字の部分がバグる）
+    - 1単語のみ発話させる場合は生成に時間がかかります
 
 <p align="right">(<a href="#readme-top">上に戻る</a>)</p>
 
-# 言語モデルについて
-別のモデルを使用したい場合は下記のリンクから選択し，
-model_download.pyとparler_tts_server.pyのモデルに関する項目を変更してください．
-https://huggingface.co/models?other=parler_tts&sort=likes
+<!-- マイルストーン -->
+## マイルストーン
+
+現時点のbugや新規機能の依頼を確認するために[Issueページ][issues-url] をご覧ください．
+
+<p align="right">(<a href="#readme-top">上に戻る</a>)</p>
+
+<!-- 参考文献 -->
+## 参考文献
+* [parler-tts](https://github.com/huggingface/parler-tts)
+
+<p align="right">(<a href="#readme-top">上に戻る</a>)</p>
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
@@ -190,3 +232,5 @@ https://huggingface.co/models?other=parler_tts&sort=likes
 [stars-url]: https://github.com/TeamSOBITS/parler_tts_ros/stargazers
 [issues-shield]: https://img.shields.io/github/issues/TeamSOBITS/parler_tts_ros.svg?style=for-the-badge
 [issues-url]: https://github.com/TeamSOBITS/parler_tts_ros/issues
+[license-shield]: https://img.shields.io/github/license/TeamSOBITS/parler_tts_ros.svg?style=for-the-badge
+[license-url]: LICENSE
